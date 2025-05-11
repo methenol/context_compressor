@@ -42,25 +42,23 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-# Get the absolute path to the .env file
-dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
-load_dotenv(dotenv_path=dotenv_path, override=True)
-
 # Import modules
 from file_processor import FileProcessor
 from llm_compressor import LLMCompressor
 from llm_validator import LLMValidator
 from directory_handler import DirectoryHandler
+from utils import setup_logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+# Load environment variables from .env file
+# Get the absolute path to the .env file
+dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+load_dotenv(dotenv_path=dotenv_path, override=True)
+
+# Get log level from environment variable and set up logging
+log_level = os.environ.get('LOG_LEVEL', 'INFO')
+setup_logging(log_level=log_level)
+
+# Create logger for this module
 logger = logging.getLogger('context_compressor')
 
 def parse_arguments():
@@ -153,6 +151,8 @@ def main():
     # Set log level based on verbosity
     if args.verbose:
         logger.setLevel(logging.DEBUG)
+        # Set root logger to DEBUG as well to ensure all module loggers respect this setting
+        logging.getLogger().setLevel(logging.DEBUG)
 
     # Log configuration
     logger.info(f"Input directory: {args.input_dir}")

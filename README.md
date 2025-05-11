@@ -33,7 +33,7 @@ This tool is designed for developers and teams leveraging LLMs in constrained to
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/context-compressor.git
+git clone https://github.com/methenol/context-compressor.git
 cd context-compressor
 
 # Install dependencies
