@@ -33,8 +33,8 @@ This tool is designed for developers and teams leveraging LLMs in constrained to
 
 ```bash
 # Clone the repository
-git clone https://github.com/methenol/context-compressor.git
-cd context-compressor
+git clone https://github.com/methenol/context_compressor.git
+cd context_compressor
 
 # Install dependencies
 pip install -r requirements.txt
