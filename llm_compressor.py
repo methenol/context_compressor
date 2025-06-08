@@ -176,7 +176,7 @@ class LLMCompressor:
 
     def _extract_protected_elements(self, content: str) -> Dict[str, set]:
         """
-        Extract elements that should be protected during compression.
+        Extract only the most critical elements that must be protected during compression.
 
         Args:
             content (str): Content to analyze
@@ -185,64 +185,24 @@ class LLMCompressor:
             Dict[str, set]: Dictionary of protected elements by type
         """
         protected = {
-            'code_blocks': set(),
             'function_names': set(),
-            'variable_names': set(),
             'api_endpoints': set(),
-            'file_paths': set(),
-            'technical_terms': set()
         }
         
-        # Extract code blocks (markdown)
-        code_block_pattern = r'```[\w]*\n(.*?)\n```'
-        for match in re.finditer(code_block_pattern, content, re.DOTALL):
-            protected['code_blocks'].add(match.group(1).strip())
-            
-        # Extract inline code
-        inline_code_pattern = r'`([^`]+)`'
-        for match in re.finditer(inline_code_pattern, content):
-            protected['technical_terms'].add(match.group(1))
-        
-        # Extract function names
+        # Extract function names - only clear function definitions
         func_patterns = [
             r'def\s+(\w+)\s*\(',
             r'function\s+(\w+)\s*\(',
-            r'(\w+)\s*\([^)]*\)\s*{',
-            r'(\w+)\s*=>\s*'
         ]
         for pattern in func_patterns:
             for match in re.finditer(pattern, content):
                 protected['function_names'].add(match.group(1))
         
-        # Extract variable names from common patterns
-        var_patterns = [
-            r'(\w+)\s*[=:]\s*',
-            r'let\s+(\w+)',
-            r'const\s+(\w+)',
-            r'var\s+(\w+)'
-        ]
-        for pattern in var_patterns:
-            for match in re.finditer(pattern, content):
-                name = match.group(1)
-                if len(name) > 2 and not name.lower() in ['the', 'and', 'for', 'this', 'that']:
-                    protected['variable_names'].add(name)
-        
-        # Extract API endpoints and URLs
-        url_pattern = r'https?://[^\s"]+'
+        # Extract API endpoints and URLs - only HTTP(S) URLs
+        url_pattern = r'https?://[^\s"\']+'
         for match in re.finditer(url_pattern, content):
             url = match.group(0).rstrip('",\'')  # Remove trailing quotes/commas
             protected['api_endpoints'].add(url)
-            
-        # Extract file paths
-        path_patterns = [
-            r'/[\w/.-]+\.\w+',
-            r'[A-Z]:\\[\w\\.-]+',
-            r'\.\/[\w/.-]+',
-            r'[\w-]+\.(py|js|html|css|json|xml|yml|yaml|md|txt)'
-        ]
-        for pattern in path_patterns:
-            for match in re.finditer(pattern, content):
-                protected['file_paths'].add(match.group(0))
         
         return protected
     def _create_compression_prompt(self, content: str, level: int) -> list:
@@ -260,87 +220,89 @@ class LLMCompressor:
         content_type = self._detect_content_type(content)
         protected_elements = self._extract_protected_elements(content)
         
-        # Base instructions based on compression level
+        # Base instructions based on compression level - focused on aggressive compression
         if level <= 3:
             base_instruction = (
-                "Compress the following content while preserving almost all information. "
-                "Focus on removing redundancy and verbose language, but keep all key details. "
-                "The result should be a slightly shorter version that maintains nearly all the original meaning."
+                "Aggressively compress the following content to achieve maximum token reduction. "
+                "Remove all redundancy, verbose language, filler words, and unnecessary explanations. "
+                "Convert paragraphs to concise bullet points where possible. Use abbreviations and acronyms for repeated terms. "
+                "The result should be significantly shorter while preserving essential information and technical accuracy."
             )
         elif level <= 6:
             base_instruction = (
-                "Compress the following content while preserving the core information and context. "
-                "Remove redundancy, verbose language, and less important details. "
-                "The result should be a moderately compressed version that maintains the essential meaning and key points."
+                "Extremely aggressively compress the following content to achieve substantial token reduction. "
+                "Remove all redundancy, verbose explanations, example details, and non-essential context. "
+                "Convert all paragraphs to terse bullet points. Use abbreviations extensively. Eliminate filler words completely. "
+                "The result should be drastically shorter while maintaining core technical information and critical details."
             )
         else:
             base_instruction = (
-                "Aggressively compress the following content while preserving only the most essential information. "
-                "Remove all redundancy, verbose language, and any details that aren't critical. "
-                "The result should be a highly compressed version that captures only the most important points and context."
+                "Maximally compress the following content to achieve the highest possible token reduction. "
+                "Remove ALL redundancy, verbose language, examples, explanations, and non-critical details. "
+                "Convert everything to ultra-concise bullet points or abbreviated phrases. Use acronyms for all repeated terms. "
+                "The result should be extremely condensed - aim for 50-70% size reduction while preserving only the most critical technical information."
             )
 
-        # Content-type specific instructions
+        # Content-type specific instructions - focused on targeted compression
         if content_type == 'code':
             content_specific = (
-                "\n\nSPECIAL INSTRUCTIONS FOR CODE CONTENT:\n"
-                "- NEVER modify or shorten code examples, function names, variable names, or code snippets\n"
-                "- Preserve ALL code blocks exactly as they appear (within ``` markers or indented)\n"
-                "- Keep all technical terminology, API names, and method names unchanged\n"
-                "- Maintain exact spacing and formatting within code sections\n"
-                "- Preserve import statements, class definitions, and function signatures completely\n"
-                "- Keep file paths, URLs, and configuration values exactly as written\n"
-                "- Only compress explanatory text and comments, never the actual code"
+                "\n\nCODE CONTENT - TARGETED COMPRESSION:\n"
+                "- Keep code blocks (``` or indented), function names, variable names, API endpoints, file paths EXACTLY unchanged\n"
+                "- Aggressively compress ALL explanatory text, comments, and documentation around code\n"
+                "- Convert verbose explanations to terse bullet points or single sentences\n"
+                "- Remove example descriptions - keep only the actual code examples\n"
+                "- Eliminate redundant explanations of what code does - let code speak for itself"
             )
         elif content_type == 'documentation':
             content_specific = (
-                "\n\nSPECIAL INSTRUCTIONS FOR DOCUMENTATION CONTENT:\n"
-                "- Preserve all code examples, command snippets, and inline code (in backticks) exactly\n"
-                "- Keep technical terms, API names, function names, and variable names unchanged\n"
-                "- Maintain all file paths, URLs, and configuration examples precisely\n"
-                "- Preserve the structure of lists, headers, and important formatting\n"
-                "- Keep installation commands, code samples, and examples intact\n"
-                "- Only compress verbose explanations while keeping essential instructions clear"
+                "\n\nDOCUMENTATION - AGGRESSIVE COMPRESSION:\n"
+                "- Keep code examples, commands, file paths, URLs, technical terms EXACTLY unchanged\n"
+                "- Convert all paragraphs to concise bullet points or numbered lists\n"
+                "- Remove verbose explanations, background context, and detailed examples\n"
+                "- Use abbreviations: documentation->docs, configuration->config, application->app, etc.\n"
+                "- Eliminate filler phrases, transition sentences, and redundant information\n"
+                "- Keep only essential instructions and critical information"
             )
         elif content_type == 'config':
             content_specific = (
-                "\n\nSPECIAL INSTRUCTIONS FOR CONFIGURATION CONTENT:\n"
-                "- NEVER change configuration keys, values, or syntax\n"
-                "- Preserve all file paths, URLs, and environment variables exactly\n"
-                "- Keep property names, settings, and parameters unchanged\n"
-                "- Maintain exact formatting for JSON, YAML, XML, or other structured data\n"
-                "- Only compress comments and documentation, never the actual configuration"
+                "\n\nCONFIGURATION - SELECTIVE COMPRESSION:\n"
+                "- Keep ALL configuration syntax, keys, values, paths, URLs EXACTLY unchanged\n"
+                "- Aggressively compress comments, descriptions, and explanatory text\n"
+                "- Convert setup instructions to minimal bullet points\n"
+                "- Remove example scenarios - keep only actual configuration examples"
             )
         else:  # mixed content
             content_specific = (
-                "\n\nSPECIAL INSTRUCTIONS FOR MIXED CONTENT:\n"
-                "- Identify and preserve ALL code examples, snippets, and technical references exactly\n"
-                "- Never modify function names, variable names, API endpoints, or file paths\n"
-                "- Keep all content within code blocks (``` or backticks) completely unchanged\n"
-                "- Preserve technical terminology, command names, and configuration values\n"
-                "- Maintain the logical structure and flow of technical information\n"
-                "- Only compress verbose explanatory text, not technical specifications"
+                "\n\nMIXED CONTENT - MAXIMUM COMPRESSION:\n"
+                "- Keep code blocks, function names, URLs, file paths, commands EXACTLY unchanged\n"
+                "- Convert ALL prose to bullet points or abbreviated phrases\n"
+                "- Use heavy abbreviation: information->info, example->ex, configuration->cfg\n"
+                "- Remove background context, detailed explanations, and verbose descriptions\n"
+                "- Eliminate redundant information and filler content aggressively"
             )
 
-        # Add protection for detected elements
+        # Add protection for detected elements - minimal and focused
         protection_notes = []
         if protected_elements['function_names']:
-            protection_notes.append(f"Function names to preserve exactly: {', '.join(list(protected_elements['function_names'])[:10])}")
+            functions = list(protected_elements['function_names'])[:5]  # Limit to most important
+            protection_notes.append(f"Preserve exactly: {', '.join(functions)}")
         if protected_elements['api_endpoints']:
-            protection_notes.append(f"URLs/endpoints to preserve exactly: {', '.join(list(protected_elements['api_endpoints'])[:5])}")
-        if protected_elements['file_paths']:
-            protection_notes.append(f"File paths to preserve exactly: {', '.join(list(protected_elements['file_paths'])[:5])}")
+            urls = list(protected_elements['api_endpoints'])[:3]  # Limit to most important  
+            protection_notes.append(f"URLs unchanged: {', '.join(urls)}")
             
         if protection_notes:
-            content_specific += f"\n\nCRITICAL ELEMENTS DETECTED (preserve exactly):\n" + "\n".join(protection_notes)
+            content_specific += f"\n\nCRITICAL ELEMENTS: " + " | ".join(protection_notes)
 
-        # Final instructions
+        # Final instructions - focused on maximum compression
         final_instructions = (
-            "\n\nFINAL REQUIREMENTS:\n"
-            "- Preserve all original titles and headings exactly as they appear without adding prefixes\n"
-            "- Do not add any new information or commentary not present in the original\n"
-            "- Maintain the overall structure and logical flow of information\n"
-            "- When in doubt about preserving something technical, always err on the side of preservation"
+            "\n\nCOMPRESSION TECHNIQUES:\n"
+            "- Convert paragraphs → bullet points\n"
+            "- Use abbreviations extensively (config, docs, info, ex, etc.)\n"
+            "- Eliminate redundant phrases and filler words\n"
+            "- Combine related points into single concise statements\n"
+            "- Remove transition sentences and verbose explanations\n"
+            "- Keep only actionable information and critical technical details\n"
+            "TARGET: Achieve 50-70% size reduction while maintaining technical accuracy"
         )
 
         instruction = base_instruction + content_specific + final_instructions
@@ -369,7 +331,7 @@ class LLMCompressor:
             "model": self.model,
             "messages": messages,
             "max_tokens": self.max_tokens,
-            "temperature": 0.3,  # Lower temperature for more deterministic results
+            "temperature": 0.1,  # Very low temperature for consistent aggressive compression
         }
 
         for attempt in range(self.max_retries):

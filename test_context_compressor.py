@@ -233,11 +233,6 @@ const CONFIG_VALUE = 'important'
         
         # Check that function names are detected
         self.assertIn('process_data', protected['function_names'])
-        # Note: fetch_data is detected as a function call, not definition
-        
-        # Check that file paths are detected
-        file_paths_found = any('/path/to/file.txt' in path for path in protected['file_paths'])
-        self.assertTrue(file_paths_found, f"Expected file path not found in: {protected['file_paths']}")
         
         # Check that API endpoints are detected
         self.assertIn('https://api.example.com/v1/data', protected['api_endpoints'])
