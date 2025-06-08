@@ -220,26 +220,26 @@ class LLMCompressor:
         content_type = self._detect_content_type(content)
         protected_elements = self._extract_protected_elements(content)
         
-        # Base instructions based on compression level - focused on aggressive compression
+        # Base instructions based on compression level - focused on aggressive compression while preserving structure
         if level <= 3:
             base_instruction = (
                 "Aggressively compress the following content to achieve maximum token reduction. "
                 "Remove all redundancy, verbose language, filler words, and unnecessary explanations. "
-                "Convert paragraphs to concise bullet points where possible. Use abbreviations and acronyms for repeated terms. "
+                "Shorten sentences dramatically while preserving their meaning. Use abbreviations and acronyms for repeated terms. "
                 "The result should be significantly shorter while preserving essential information and technical accuracy."
             )
         elif level <= 6:
             base_instruction = (
                 "Extremely aggressively compress the following content to achieve substantial token reduction. "
                 "Remove all redundancy, verbose explanations, example details, and non-essential context. "
-                "Convert all paragraphs to terse bullet points. Use abbreviations extensively. Eliminate filler words completely. "
+                "Shorten all sentences to their essential components. Use abbreviations extensively. Eliminate filler words completely. "
                 "The result should be drastically shorter while maintaining core technical information and critical details."
             )
         else:
             base_instruction = (
                 "Maximally compress the following content to achieve the highest possible token reduction. "
                 "Remove ALL redundancy, verbose language, examples, explanations, and non-critical details. "
-                "Convert everything to ultra-concise bullet points or abbreviated phrases. Use acronyms for all repeated terms. "
+                "Convert to ultra-concise phrases and abbreviated language. Use acronyms for all repeated terms. "
                 "The result should be extremely condensed - aim for 50-70% size reduction while preserving only the most critical technical information."
             )
 
@@ -249,7 +249,7 @@ class LLMCompressor:
                 "\n\nCODE CONTENT - TARGETED COMPRESSION:\n"
                 "- Keep code blocks (``` or indented), function names, variable names, API endpoints, file paths EXACTLY unchanged\n"
                 "- Aggressively compress ALL explanatory text, comments, and documentation around code\n"
-                "- Convert verbose explanations to terse bullet points or single sentences\n"
+                "- Shorten verbose explanations to essential phrases\n"
                 "- Remove example descriptions - keep only the actual code examples\n"
                 "- Eliminate redundant explanations of what code does - let code speak for itself"
             )
@@ -257,8 +257,8 @@ class LLMCompressor:
             content_specific = (
                 "\n\nDOCUMENTATION - AGGRESSIVE COMPRESSION:\n"
                 "- Keep code examples, commands, file paths, URLs, technical terms EXACTLY unchanged\n"
-                "- Convert all paragraphs to concise bullet points or numbered lists\n"
-                "- Remove verbose explanations, background context, and detailed examples\n"
+                "- Compress verbose explanations to essential information only\n"
+                "- Remove background context and detailed examples\n"
                 "- Use abbreviations: documentation->docs, configuration->config, application->app, etc.\n"
                 "- Eliminate filler phrases, transition sentences, and redundant information\n"
                 "- Keep only essential instructions and critical information"
@@ -268,14 +268,14 @@ class LLMCompressor:
                 "\n\nCONFIGURATION - SELECTIVE COMPRESSION:\n"
                 "- Keep ALL configuration syntax, keys, values, paths, URLs EXACTLY unchanged\n"
                 "- Aggressively compress comments, descriptions, and explanatory text\n"
-                "- Convert setup instructions to minimal bullet points\n"
+                "- Shorten setup instructions to minimal essential steps\n"
                 "- Remove example scenarios - keep only actual configuration examples"
             )
         else:  # mixed content
             content_specific = (
                 "\n\nMIXED CONTENT - MAXIMUM COMPRESSION:\n"
                 "- Keep code blocks, function names, URLs, file paths, commands EXACTLY unchanged\n"
-                "- Convert ALL prose to bullet points or abbreviated phrases\n"
+                "- Compress all prose to abbreviated, essential language\n"
                 "- Use heavy abbreviation: information->info, example->ex, configuration->cfg\n"
                 "- Remove background context, detailed explanations, and verbose descriptions\n"
                 "- Eliminate redundant information and filler content aggressively"
@@ -293,16 +293,22 @@ class LLMCompressor:
         if protection_notes:
             content_specific += f"\n\nCRITICAL ELEMENTS: " + " | ".join(protection_notes)
 
-        # Final instructions - focused on maximum compression
+        # Final instructions - focused on maximum compression while preserving structure
         final_instructions = (
             "\n\nCOMPRESSION TECHNIQUES:\n"
-            "- Convert paragraphs → bullet points\n"
+            "- Shorten sentences to essential components only\n"
             "- Use abbreviations extensively (config, docs, info, ex, etc.)\n"
-            "- Eliminate redundant phrases and filler words\n"
-            "- Combine related points into single concise statements\n"
+            "- Eliminate redundant phrases and filler words completely\n"
+            "- Combine related information into single concise statements\n"
             "- Remove transition sentences and verbose explanations\n"
             "- Keep only actionable information and critical technical details\n"
-            "TARGET: Achieve 50-70% size reduction while maintaining technical accuracy"
+            "\n\nSTRUCTURE PRESERVATION:\n"
+            "- Maintain original formatting structure (headers, sections, indentation)\n"
+            "- Preserve original titles and headings exactly as they appear\n"
+            "- Keep document flow and organization intact\n"
+            "- Do not convert to bullet points unless already in that format\n"
+            "- Do not add bold formatting (**) or other markup not in original\n"
+            "\nTARGET: Achieve 50-70% size reduction while maintaining technical accuracy and original structure"
         )
 
         instruction = base_instruction + content_specific + final_instructions
