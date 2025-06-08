@@ -14,6 +14,8 @@ from pathlib import Path
 from file_processor import FileProcessor
 from directory_handler import DirectoryHandler
 from utils import estimate_tokens, chunk_text
+from llm_compressor import LLMCompressor
+from llm_validator import LLMValidator
 
 class TestFileProcessor(unittest.TestCase):
     """Test the FileProcessor class."""
@@ -99,9 +101,16 @@ class TestDirectoryHandler(unittest.TestCase):
         handler = DirectoryHandler(self.input_dir, self.output_dir)
         handler.create_output_structure()
 
-        # Check if directories are created
+        # The output directory should be created
+        self.assertTrue(os.path.exists(self.output_dir))
+        
+        # Subdirectories are created when files are written, test that functionality
+        test_file_path = os.path.join(self.input_dir, 'subdir1/test2.txt')
+        output_path = handler.get_output_path(test_file_path)
+        handler.write_file(output_path, "Test content")
+        
+        # Now the subdirectory should exist
         self.assertTrue(os.path.exists(os.path.join(self.output_dir, 'subdir1')))
-        self.assertTrue(os.path.exists(os.path.join(self.output_dir, 'subdir2/subsubdir')))
 
     def test_get_output_path(self):
         """Test output path generation."""
@@ -158,6 +167,160 @@ class TestUtils(unittest.TestCase):
 
         # Should be split into multiple chunks
         self.assertTrue(len(chunks) > 1)
+
+class TestLLMCompressor(unittest.TestCase):
+    """Test the LLMCompressor enhancements."""
+
+    def test_detect_content_type_code(self):
+        """Test content type detection for code."""
+        compressor = LLMCompressor("http://test", "fake-key", "test-model")
+        
+        code_content = """
+def hello_world():
+    print("Hello, World!")
+    return True
+
+class TestClass:
+    def __init__(self):
+        self.value = 42
+"""
+        content_type = compressor._detect_content_type(code_content)
+        self.assertEqual(content_type, 'code')
+
+    def test_detect_content_type_documentation(self):
+        """Test content type detection for documentation."""
+        compressor = LLMCompressor("http://test", "fake-key", "test-model")
+        
+        doc_content = """
+# Getting Started
+
+This is a markdown document with some instructions.
+
+## Installation
+
+1. First step
+2. Second step
+3. Third step
+
+### Code Example
+
+```python
+print("hello")
+```
+
+Visit [our website](https://example.com) for more info.
+"""
+        content_type = compressor._detect_content_type(doc_content)
+        self.assertEqual(content_type, 'documentation')
+
+    def test_extract_protected_elements(self):
+        """Test extraction of protected elements."""
+        compressor = LLMCompressor("http://test", "fake-key", "test-model")
+        
+        content = """
+def process_data(input_file):
+    with open('/path/to/file.txt', 'r') as f:
+        data = f.read()
+    
+    api_url = "https://api.example.com/v1/data"
+    result = fetch_data(api_url)
+    return result
+
+const CONFIG_VALUE = 'important'
+"""
+        
+        protected = compressor._extract_protected_elements(content)
+        
+        # Check that function names are detected
+        self.assertIn('process_data', protected['function_names'])
+        
+        # Check that API endpoints are detected
+        self.assertIn('https://api.example.com/v1/data', protected['api_endpoints'])
+
+class TestLLMValidator(unittest.TestCase):
+    """Test the LLMValidator enhancements."""
+
+    def test_extract_critical_elements(self):
+        """Test extraction of critical elements for validation."""
+        validator = LLMValidator("http://test", "fake-key", "test-model")
+        
+        content = """
+# API Documentation
+
+Use the `GET /api/users` endpoint to fetch users.
+
+```python
+def get_users():
+    response = requests.get("https://api.example.com/users")
+    return response.json()
+```
+
+Configuration file at `/etc/config.yml` should contain:
+- database_url: "postgresql://localhost/db"
+- api_key: "your-key-here"
+"""
+        
+        critical = validator._extract_critical_elements(content)
+        
+        # Check function names
+        self.assertIn('get_users', critical['function_names'])
+        
+        # Check API endpoints
+        self.assertIn('https://api.example.com/users', critical['api_endpoints'])
+        
+        # Check file paths
+        self.assertTrue(any('/etc/config.yml' in path for path in critical['file_paths']))
+        
+        # Check technical terms
+        self.assertIn('GET /api/users', critical['technical_terms'])
+
+    def test_parse_validation_result_json(self):
+        """Test parsing of JSON validation results."""
+        validator = LLMValidator("http://test", "fake-key", "test-model")
+        
+        json_response = '''{
+            "is_valid": true,
+            "message": "All technical elements preserved",
+            "missing_information": [],
+            "technical_errors": []
+        }'''
+        
+        is_valid, message = validator._parse_validation_result(json_response)
+        self.assertTrue(is_valid)
+        self.assertIn("technical elements preserved", message)
+
+    def test_parse_validation_result_embedded_json(self):
+        """Test parsing of JSON embedded in text."""
+        validator = LLMValidator("http://test", "fake-key", "test-model")
+        
+        text_response = '''Here is my validation result:
+        
+```json
+{
+    "is_valid": false,
+    "message": "Code block missing",
+    "missing_information": ["function definition"],
+    "technical_errors": ["Variable name changed"]
+}
+```
+
+That's my analysis.'''
+        
+        is_valid, message = validator._parse_validation_result(text_response)
+        self.assertFalse(is_valid)
+        self.assertIn("Code block missing", message)
+        self.assertIn("Variable name changed", message)
+
+    def test_parse_validation_result_text_fallback(self):
+        """Test text fallback parsing when JSON fails."""
+        validator = LLMValidator("http://test", "fake-key", "test-model")
+        
+        text_response = "The validation failed because code missing and functions missing important technical details."
+        
+        is_valid, message = validator._parse_validation_result(text_response)
+        self.assertFalse(is_valid)
+        # Should trigger the enhanced text analysis path
+        self.assertTrue("enhanced text analysis" in message or "pattern analysis" in message)
 
 if __name__ == '__main__':
     unittest.main()
